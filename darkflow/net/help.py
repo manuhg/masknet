@@ -83,6 +83,7 @@ def camera(self):
     assert camera.isOpened(), \
     'Cannot capture source'
     
+    file = 0
     if file == 0:#camera window
         cv2.namedWindow('', 0)
         _, frame = camera.read()
