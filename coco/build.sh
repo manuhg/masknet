@@ -1,2 +1,2 @@
-python setup.py build_ext --inplace
-sudo python setup.py build_ext install
+python3 setup.py build_ext --inplace
+sudo python3 setup.py build_ext install

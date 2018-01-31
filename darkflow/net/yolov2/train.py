@@ -7,7 +7,7 @@ import os
 import math
 
 def expit_tensor(x):
-	return 1. / (1. + tf.exp(-x))
+    return 1. / (1. + tf.exp(-x))
 
 def loss(self, net_out):
     """
@@ -53,20 +53,20 @@ def loss(self, net_out):
     }
 
     # Extract the coordinate prediction from net.out
-    net_out_reshape = tf.reshape(net_out, [-1, H, W, B, (4 + 1 + C)])
+    net_out_reshape = tf.reshape(net_out, [-1, H, W, B, (4 + 1 + C)], name="reshape1")
     coords = net_out_reshape[:, :, :, :, :4]
-    coords = tf.reshape(coords, [-1, H*W, B, 4])
+    coords = tf.reshape(coords, [-1, H*W, B, 4], name="reshape2")
     adjusted_coords_xy = expit_tensor(coords[:,:,:,0:2])
     adjusted_coords_wh = tf.sqrt(tf.exp(coords[:,:,:,2:4]) * np.reshape(anchors, [1, 1, B, 2]) / np.reshape([W, H], [1, 1, 1, 2]))
     coords = tf.concat([adjusted_coords_xy, adjusted_coords_wh], 3)
 
     adjusted_c = expit_tensor(net_out_reshape[:, :, :, :, 4])
-    adjusted_c = tf.reshape(adjusted_c, [-1, H*W, B, 1])
+    adjusted_c = tf.reshape(adjusted_c, [-1, H*W, B, 1], name="reshape3")
 
-    adjusted_prob = tf.nn.softmax(net_out_reshape[:, :, :, :, 5:])
-    adjusted_prob = tf.reshape(adjusted_prob, [-1, H*W, B, C])
+    adjusted_prob = tf.nn.softmax(net_out_reshape[:, :, :, :, 5:], name="softmax1")
+    adjusted_prob = tf.reshape(adjusted_prob, [-1, H*W, B, C], name="reshape4")
 
-    adjusted_net_out = tf.concat([adjusted_coords_xy, adjusted_coords_wh, adjusted_c, adjusted_prob], 3)
+    adjusted_net_out = tf.concat([adjusted_coords_xy, adjusted_coords_wh, adjusted_c, adjusted_prob], 3, name="concat1")
 
     wh = tf.pow(coords[:,:,:,2:4], 2) * np.reshape([W, H], [1, 1, 1, 2])
     area_pred = wh[:,:,:,0] * wh[:,:,:,1]
@@ -83,7 +83,7 @@ def loss(self, net_out):
 
     # calculate the best IOU, set 0.0 confidence for worse boxes
     iou = tf.truediv(intersect, _areas + area_pred - intersect)
-    best_box = tf.equal(iou, tf.reduce_max(iou, [2], True))
+    best_box = tf.equal(iou, tf.reduce_max(iou, [2], True, name="max1"))
     best_box = tf.to_float(best_box)
     confs = tf.multiply(best_box, _confs)
 
@@ -96,7 +96,7 @@ def loss(self, net_out):
 
     self.fetch += [_probs, confs, conid, cooid, proid]
     true = tf.concat([_coord, tf.expand_dims(confs, 3), _probs ], 3)
-    wght = tf.concat([cooid, tf.expand_dims(conid, 3), proid ], 3)
+    wght = tf.concat([cooid, tf.expand_dims(conid, 3, name="expand1"), proid ], 3)
 
     print('Building {} loss'.format(m['model']))
     loss = tf.pow(adjusted_net_out - true, 2)
@@ -105,3 +105,9 @@ def loss(self, net_out):
     loss = tf.reduce_sum(loss, 1)
     self.loss = .5 * tf.reduce_mean(loss)
     tf.summary.scalar('{} loss'.format(m['model']), self.loss)
+
+    net_out_img = tf.reshape(net_out, [-1, H, W, B, (4 + 1 + C)])
+    net_out_img = net_out_img[:, :, :, 0, 5]
+    net_out_img = tf.reshape(net_out_img, [-1, H, W, 1])
+
+    tf.summary.image('{} out'.format(m['model']), net_out_img, max_outputs=5)
