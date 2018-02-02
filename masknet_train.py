@@ -20,45 +20,7 @@ from datetime import datetime
 from keras.engine.topology import Layer
 import keras.backend as K
 import tensorflow as tf
-
-my_num_rois = 32
-my_inp_size = 19
-
-class RoiPoolingConv(Layer):
-    def __init__(self, pool_size, num_rois, **kwargs):
-
-        self.dim_ordering = K.image_dim_ordering()
-        assert(self.dim_ordering == 'tf')
-
-        self.pool_size = pool_size
-        self.num_rois = num_rois
-
-        super(RoiPoolingConv, self).__init__(**kwargs)
-
-    def build(self, input_shape):
-        self.nb_channels = input_shape[0][3]
-
-    def compute_output_shape(self, input_shape):
-        return None, self.num_rois, self.pool_size, self.pool_size, self.nb_channels
-
-    def call(self, x, mask=None):
-        assert(len(x) == 2)
-
-        img = x[0]
-        rois = x[1]
-
-        rois_flattened = K.reshape(rois, (-1, 4))
-
-        shape = tf.shape(rois_flattened)
-        box_indices = tf.range(0, shape[0]) // self.num_rois
-
-        res = tf.image.crop_and_resize(
-            img, rois_flattened, box_indices, (self.pool_size, self.pool_size),
-            method="bilinear")
-
-        res = K.reshape(res, (-1, self.num_rois, self.pool_size, self.pool_size, self.nb_channels))
-
-        return res
+import masknet
 
 def roi_pool_cpu(frame, bbox, pool_size):
     frame_h, frame_w = frame.shape[:2]
@@ -134,7 +96,7 @@ def process_coco(coco, img_path):
                 if (np.count_nonzero(msk) == 0):
                     continue
 
-                assert(len(rois) < my_num_rois)
+                assert(len(rois) < masknet.my_num_rois)
 
                 x1 = np.float32(bbox[0])
                 y1 = np.float32(bbox[1])
@@ -143,7 +105,7 @@ def process_coco(coco, img_path):
 
                 rois.append([y1, x1, y1 + h1, x1 + w1])
                 msks.append(msk.astype('float32'))
-        for _ in range(my_num_rois - len(rois)):
+        for _ in range(masknet.my_num_rois - len(rois)):
             rois.append([np.float32(0.0), np.float32(0.0), np.float32(0.0), np.float32(0.0)])
             msks.append(fake_msk)
         msks = np.array(msks)
@@ -172,38 +134,11 @@ def fit_generator(coco, imgs, batch_size):
             gc.collect()
             yield ([np.array(x1), np.array(x2)], np.array(y))
 
-def my_loss(y_true, y_pred):
-    mask_shape = tf.shape(y_pred)
-    y_pred = K.reshape(y_pred, (-1, mask_shape[2], mask_shape[3], mask_shape[4]))
-    mask_shape = tf.shape(y_true)
-    y_true = K.reshape(y_true, (-1, mask_shape[2], mask_shape[3], mask_shape[4]))
-
-    sm = tf.reduce_sum(y_true, 0)
-
-    ix = tf.where(sm > 0)[:, 0]
-
-    y_true = tf.gather(y_true, ix)
-    y_pred = tf.gather(y_pred, ix)
-
-    loss = K.binary_crossentropy(target=y_true, output=y_pred)
-    loss = K.mean(loss)
-    loss = K.reshape(loss, [1, 1])
-    return loss
-
 if __name__ == "__main__":
-    img_input = Input(shape=(my_inp_size, my_inp_size, 1024))
-    roi_input = Input(shape=(my_num_rois, 4))
-
-    roi_pool_layer = RoiPoolingConv(7, my_num_rois)([img_input, roi_input])
-
-    x = TimeDistributed(Conv2D(2048, (3, 3), activation='relu', padding='same'))(roi_pool_layer)
-    x = TimeDistributed(Conv2DTranspose(256, (2, 2), activation='relu', strides=2))(x)
-    x = TimeDistributed(Conv2D(1, (1, 1), activation='sigmoid', strides=1))(x)
-
-    model = Model(inputs=[img_input, roi_input], outputs=x)
+    model = masknet.create_model()
     model.summary()
     optimizer = Adam(lr=1e-5)
-    model.compile(loss=[my_loss], optimizer=optimizer, metrics=['accuracy'])
+    model.compile(loss=[masknet.my_loss], optimizer=optimizer, metrics=['accuracy'])
 
     bdir = '../darknet/scripts/coco'
     train_coco = COCO(bdir + "/annotations/person_keypoints_train2014.json")
