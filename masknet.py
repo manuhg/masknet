@@ -66,7 +66,7 @@ def my_loss(y_true, y_pred):
     mask_shape = tf.shape(y_true)
     y_true = K.reshape(y_true, (-1, mask_shape[2], mask_shape[3], mask_shape[4]))
 
-    sm = tf.reduce_sum(y_true, 0)
+    sm = tf.reduce_sum(y_true, [1,2,3])
 
     ix = tf.where(sm > 0)[:, 0]
 

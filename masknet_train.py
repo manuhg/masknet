@@ -11,6 +11,7 @@ from keras.models import Model
 from keras.callbacks import ModelCheckpoint
 from keras.optimizers import Adam, SGD, RMSprop
 from pycocotools.coco import COCO
+from keras.metrics import binary_accuracy
 from random import shuffle
 import gc, math
 import keras.backend as K
@@ -47,7 +48,7 @@ def roi_pool_cpu(frame, bbox, pool_size):
 
     return slc
 
-def process_coco(coco, img_path):
+def process_coco(coco, img_path, limit):
     res = []
     cat_ids = coco.getCatIds(catNms=['person'])
     img_ids = coco.getImgIds(catIds=cat_ids)
@@ -57,7 +58,8 @@ def process_coco(coco, img_path):
 
     fake_msk = np.zeros((14, 14), dtype=np.uint8).astype('float32')
 
-    imgs = imgs[:1000]
+    if limit:
+        imgs = imgs[:limit]
 
     for img in imgs:
         iter1 += 1
@@ -86,6 +88,7 @@ def process_coco(coco, img_path):
                     continue
 
                 if ann['iscrowd']:
+                    continue
                     # For crowd masks, annToMask() sometimes returns a mask
                     # smaller than the given dimensions. If so, resize it.
                     if m.shape[0] != frame_h or m.shape[1] != frame_w:
@@ -131,26 +134,41 @@ def fit_generator(coco, imgs, batch_size):
                 x1.append(conv)
                 x2.append(rois)
                 y.append(msks)
-            gc.collect()
+            #gc.collect()
             yield ([np.array(x1), np.array(x2)], np.array(y))
+
+def my_accuracy(y_true, y_pred):
+    mask_shape = tf.shape(y_pred)
+    y_pred = K.reshape(y_pred, (-1, mask_shape[2], mask_shape[3], mask_shape[4]))
+    mask_shape = tf.shape(y_true)
+    y_true = K.reshape(y_true, (-1, mask_shape[2], mask_shape[3], mask_shape[4]))
+
+    sm = tf.reduce_sum(y_true, [1,2,3])
+
+    ix = tf.where(sm > 0)[:, 0]
+
+    y_true = tf.gather(y_true, ix)
+    y_pred = tf.gather(y_pred, ix)
+
+    return binary_accuracy(y_true, y_pred)
 
 if __name__ == "__main__":
     model = masknet.create_model()
     model.summary()
     optimizer = Adam(lr=1e-5)
-    model.compile(loss=[masknet.my_loss], optimizer=optimizer, metrics=['accuracy'])
+    model.compile(loss=[masknet.my_loss], optimizer=optimizer, metrics=[my_accuracy])
 
     bdir = '../darknet/scripts/coco'
     train_coco = COCO(bdir + "/annotations/person_keypoints_train2014.json")
     val_coco = COCO(bdir + "/annotations/person_keypoints_val2014.json")
-    train_imgs = process_coco(train_coco, bdir + "/images/train2014")
-    val_imgs = process_coco(val_coco, bdir + "/images/val2014")
+    train_imgs = process_coco(train_coco, bdir + "/images/train2014", 1000)
+    val_imgs = process_coco(val_coco, bdir + "/images/val2014", 100)
 
-    batch_size = 64
+    batch_size = 8
 
     train_data = fit_generator(train_coco, train_imgs, batch_size)
 
-    validation_data = fit_generator(val_coco, val_imgs[:100], batch_size)
+    validation_data = fit_generator(val_coco, val_imgs, batch_size)
 
     callbacks = []
     callbacks.append(ModelCheckpoint(filepath="weights.hdf5", monitor='val_loss', save_best_only=True))
@@ -158,9 +176,9 @@ if __name__ == "__main__":
     model.fit_generator(train_data,
         steps_per_epoch=len(train_imgs) / batch_size,
         validation_steps=len(val_imgs) / batch_size,
-        epochs=2,
+        epochs=100,
         validation_data=validation_data,
-        use_multiprocessing=False,
+        #use_multiprocessing=False,
         verbose=1,
         callbacks=callbacks)
 

@@ -15,7 +15,7 @@ def process_coco(coco, img_path):
     processed = 0
     iter1 = 0
 
-    imgs = imgs[:1000]
+    #imgs = imgs[:1000]
 
     for img in imgs:
         iter1 += 1

@@ -164,9 +164,15 @@ if __name__ == "__main__":
                     right = int(x2 * frame_w)
                     bot = int(y2 * frame_h)
 
-                    mask2 = imresize(mask, (bot - top, right - left), 'bilinear')
+                    mask = imresize(mask, (bot - top, right - left), interp='bilinear').astype(np.float32) / 255.0
+                    mask2 = np.where(mask >= 0.5, 1, 0).astype(np.uint8)
 
-                    mask3 = cv2.merge((mask2 * 0, mask2 * 0, mask2 * 255))
+                    if (i % 3) == 0:
+                        mask3 = cv2.merge((mask2 * 0, mask2 * 0, mask2 * 255))
+                    elif (i % 3) == 1:
+                        mask3 = cv2.merge((mask2 * 0, mask2 * 255, mask2 * 0))
+                    else:
+                        mask3 = cv2.merge((mask2 * 255, mask2 * 0, mask2 * 0))
 
                     img[top:bot,left:right] = cv2.addWeighted(img[top:bot,left:right], 1.0, mask3, 0.8, 0)
 
