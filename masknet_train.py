@@ -108,12 +108,13 @@ def process_coco(coco, img_path, limit):
 
                 rois.append([y1, x1, y1 + h1, x1 + w1])
                 msks.append(msk.astype('float32'))
-        for _ in range(masknet.my_num_rois - len(rois)):
-            rois.append([np.float32(0.0), np.float32(0.0), np.float32(0.0), np.float32(0.0)])
-            msks.append(fake_msk)
-        msks = np.array(msks)
-        msks = msks[..., np.newaxis]
-        res.append((img['file_name'], img_path, np.array(rois), msks))
+        if (len(rois) > 0):
+            for _ in range(masknet.my_num_rois - len(rois)):
+                rois.append([np.float32(0.0), np.float32(0.0), np.float32(0.0), np.float32(0.0)])
+                msks.append(fake_msk)
+            msks = np.array(msks)
+            msks = msks[..., np.newaxis]
+            res.append((img['file_name'], img_path, np.array(rois), msks))
 
     return res
 
@@ -161,8 +162,8 @@ if __name__ == "__main__":
     bdir = '../darknet/scripts/coco'
     train_coco = COCO(bdir + "/annotations/person_keypoints_train2014.json")
     val_coco = COCO(bdir + "/annotations/person_keypoints_val2014.json")
-    train_imgs = process_coco(train_coco, bdir + "/images/train2014", 1000)
-    val_imgs = process_coco(val_coco, bdir + "/images/val2014", 100)
+    train_imgs = process_coco(train_coco, bdir + "/images/train2014", None)
+    val_imgs = process_coco(val_coco, bdir + "/images/val2014", 5000)
 
     batch_size = 8
 
