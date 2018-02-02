@@ -116,7 +116,13 @@ class TFNet(object):
 			args = [layer, state, i, roof, self.feed]
 			state = op_create(*args)
 			mess = state.verbalise()
-			self.say(mess)
+			my_out = tf.identity(state.out, name=('my_tensor_' + str(i)))
+			if (i == 43):
+				self.my_out = my_out
+			if mess:
+				self.say(mess + ' my_tensor_' + str(i))
+			else:
+				self.say(mess)
 		self.say(LINE)
 
 		self.top = state
