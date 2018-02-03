@@ -2,11 +2,13 @@
 
 import cv2
 import numpy as np
+import keras.layers as KL
 from keras.layers import Conv2D
 from keras.layers import Conv2DTranspose
 from keras.layers import TimeDistributed
 from keras.layers import Input
 from keras.layers import LSTM
+from keras.layers import Dropout
 from keras.models import Model
 from keras.callbacks import ModelCheckpoint
 from keras.optimizers import Adam, SGD, RMSprop
@@ -23,6 +25,7 @@ import tensorflow as tf
 
 my_num_rois = 32
 my_inp_size = 19
+my_msk_inp = 7
 
 class RoiPoolingConv(Layer):
     def __init__(self, pool_size, num_rois, **kwargs):
@@ -78,14 +81,62 @@ def my_loss(y_true, y_pred):
     loss = K.reshape(loss, [1, 1])
     return loss
 
+class BatchNorm(KL.BatchNormalization):
+    def call(self, inputs, training=None):
+        return super(self.__class__, self).call(inputs, training=True)
+
 def create_model():
     img_input = Input(shape=(my_inp_size, my_inp_size, 1024))
     roi_input = Input(shape=(my_num_rois, 4))
 
-    roi_pool_layer = RoiPoolingConv(7, my_num_rois)([img_input, roi_input])
+    roi_pool_layer = RoiPoolingConv(my_msk_inp, my_num_rois)([img_input, roi_input])
 
-    x = TimeDistributed(Conv2D(2048, (3, 3), activation='relu', padding='same'))(roi_pool_layer)
+    #x = TimeDistributed(Conv2D(2048, (3, 3), activation='relu', padding='same'))(roi_pool_layer)
+
+    x = KL.TimeDistributed(KL.Conv2D(2048, (3, 3), padding="same"))(roi_pool_layer)
+    x = KL.TimeDistributed(KL.BatchNormalization(axis=3))(x)
+    x = KL.Activation('relu')(x)
+
+
+    #x = TimeDistributed(KL.Dropout(0.5))(x)
     x = TimeDistributed(Conv2DTranspose(256, (2, 2), activation='relu', strides=2))(x)
+    #x = TimeDistributed(KL.Dropout(0.5))(x)
     x = TimeDistributed(Conv2D(1, (1, 1), activation='sigmoid', strides=1))(x)
+
+    return Model(inputs=[img_input, roi_input], outputs=x)
+
+    x = KL.TimeDistributed(KL.Conv2D(256, (3, 3), padding="same"),
+                           name="mrcnn_mask_conv1")(roi_pool_layer)
+    x = KL.TimeDistributed(BatchNorm(axis=3),
+                           name='mrcnn_mask_bn1')(x)
+    x = KL.Activation('relu')(x)
+    #x = KL.Dropout(0.5)(x)
+
+    x = KL.TimeDistributed(KL.Conv2D(256, (3, 3), padding="same"),
+                           name="mrcnn_mask_conv2")(x)
+    x = KL.TimeDistributed(BatchNorm(axis=3),
+                           name='mrcnn_mask_bn2')(x)
+    x = KL.Activation('relu')(x)
+    #x = KL.Dropout(0.5)(x)
+
+    x = KL.TimeDistributed(KL.Conv2D(256, (3, 3), padding="same"),
+                           name="mrcnn_mask_conv3")(x)
+    x = KL.TimeDistributed(BatchNorm(axis=3),
+                           name='mrcnn_mask_bn3')(x)
+    x = KL.Activation('relu')(x)
+    #x = KL.Dropout(0.5)(x)
+
+    x = KL.TimeDistributed(KL.Conv2D(256, (3, 3), padding="same"),
+                           name="mrcnn_mask_conv4")(x)
+    x = KL.TimeDistributed(BatchNorm(axis=3),
+                           name='mrcnn_mask_bn4')(x)
+    x = KL.Activation('relu')(x)
+    #x = KL.Dropout(0.5)(x)
+
+    x = KL.TimeDistributed(KL.Conv2DTranspose(256, (2, 2), strides=2, activation="relu"),
+                           name="mrcnn_mask_deconv")(x)
+    #x = KL.Dropout(0.5)(x)
+    x = KL.TimeDistributed(KL.Conv2D(1, (1, 1), strides=1, activation="sigmoid"),
+                           name="mrcnn_mask")(x)
 
     return Model(inputs=[img_input, roi_input], outputs=x)

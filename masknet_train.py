@@ -9,6 +9,7 @@ from keras.layers import Input
 from keras.layers import LSTM
 from keras.models import Model
 from keras.callbacks import ModelCheckpoint
+from keras.callbacks import LearningRateScheduler
 from keras.optimizers import Adam, SGD, RMSprop
 from pycocotools.coco import COCO
 from keras.metrics import binary_accuracy
@@ -17,6 +18,7 @@ import gc, math
 import keras.backend as K
 from scipy.misc import imresize
 from datetime import datetime
+import threading
 
 from keras.engine.topology import Layer
 import keras.backend as K
@@ -31,20 +33,18 @@ def roi_pool_cpu(frame, bbox, pool_size):
     w1 = int(bbox[2] * frame_w)
     h1 = int(bbox[3] * frame_h)
 
-    if (w1 <= 0):
-        w1 = 1
-    if (h1 <= 0):
-        h1 = 1
+    #if (w1 <= 0):
+    #    w1 = 1
+    #if (h1 <= 0):
+    #    h1 = 1
 
     slc = frame[y1:y1+h1,x1:x1+w1,...]
 
-    if len(slc.shape) == 3:
-        slc2 = np.empty((pool_size, pool_size, slc.shape[2]), dtype=slc.dtype)
-        for i in range(slc.shape[2]):
-            slc2[:, :, i] = imresize(slc[:, :, i], (pool_size, pool_size), 'bilinear')
-        slc = slc2
-    else:
-        slc = imresize(slc, (pool_size, pool_size), 'bilinear')
+    if (w1 <= 0) or (h1 <= 0):
+        assert(np.count_nonzero(slc) == 0)
+        return slc
+
+    slc = imresize(slc.astype(float), (pool_size, pool_size), 'nearest') / 255.0
 
     return slc
 
@@ -56,7 +56,7 @@ def process_coco(coco, img_path, limit):
     processed = 0
     iter1 = 0
 
-    fake_msk = np.zeros((14, 14), dtype=np.uint8).astype('float32')
+    fake_msk = np.zeros((masknet.my_msk_inp * 2, masknet.my_msk_inp * 2), dtype=np.uint8).astype('float32')
 
     if limit:
         imgs = imgs[:limit]
@@ -94,7 +94,7 @@ def process_coco(coco, img_path, limit):
                     if m.shape[0] != frame_h or m.shape[1] != frame_w:
                         m = np.ones([frame_h, frame_w], dtype=bool)
 
-                msk = roi_pool_cpu(m, bbox, 14)
+                msk = roi_pool_cpu(m, bbox, masknet.my_msk_inp * 2)
 
                 if (np.count_nonzero(msk) == 0):
                     continue
@@ -107,7 +107,7 @@ def process_coco(coco, img_path, limit):
                 h1 = np.float32(bbox[3])
 
                 rois.append([y1, x1, y1 + h1, x1 + w1])
-                msks.append(msk.astype('float32'))
+                msks.append(msk)
         if (len(rois) > 0):
             for _ in range(masknet.my_num_rois - len(rois)):
                 rois.append([np.float32(0.0), np.float32(0.0), np.float32(0.0), np.float32(0.0)])
@@ -118,7 +118,32 @@ def process_coco(coco, img_path, limit):
 
     return res
 
-def fit_generator(coco, imgs, batch_size):
+class threadsafe_iter:
+    """Takes an iterator/generator and makes it thread-safe by
+    serializing call to the `next` method of given iterator/generator.
+    """
+    def __init__(self, it):
+        self.it = it
+        self.lock = threading.Lock()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        with self.lock:
+            return self.it.__next__()
+
+
+def threadsafe_generator(f):
+    """A decorator that takes a generator function and makes it thread-safe.
+    """
+    def g(*a, **kw):
+        return threadsafe_iter(f(*a, **kw))
+    return g
+
+@threadsafe_generator
+def fit_generator(imgs, batch_size):
+    ii = 0
     while True:
         shuffle(imgs)
         for k in range(len(imgs) // batch_size):
@@ -131,11 +156,13 @@ def fit_generator(coco, imgs, batch_size):
             x2 = []
             y = []
             for img_name, _, rois, msks in batch:
-                conv = np.load("masknet_data/" + img_name.replace('.jpg', '.npz'))['arr_0']
+                conv = np.load("masknet_data_50/" + img_name.replace('.jpg', '.npz'))['arr_0']
                 x1.append(conv)
                 x2.append(rois)
                 y.append(msks)
             #gc.collect()
+            #print("yield",ii)
+            ii += 1
             yield ([np.array(x1), np.array(x2)], np.array(y))
 
 def my_accuracy(y_true, y_pred):
@@ -156,8 +183,8 @@ def my_accuracy(y_true, y_pred):
 if __name__ == "__main__":
     model = masknet.create_model()
     model.summary()
-    optimizer = Adam(lr=1e-5)
-    model.compile(loss=[masknet.my_loss], optimizer=optimizer, metrics=[my_accuracy])
+    model.compile(loss=[masknet.my_loss], optimizer='adam', metrics=[my_accuracy])
+    #model.load_weights("weights2.hdf5")
 
     bdir = '../darknet/scripts/coco'
     train_coco = COCO(bdir + "/annotations/person_keypoints_train2014.json")
@@ -165,21 +192,28 @@ if __name__ == "__main__":
     train_imgs = process_coco(train_coco, bdir + "/images/train2014", None)
     val_imgs = process_coco(val_coco, bdir + "/images/val2014", 5000)
 
-    batch_size = 8
+    #train_imgs += val_imgs[5000:]
+    #val_imgs = val_imgs[:5000]
 
-    train_data = fit_generator(train_coco, train_imgs, batch_size)
+    batch_size = 16
 
-    validation_data = fit_generator(val_coco, val_imgs, batch_size)
+    train_data = fit_generator(train_imgs, batch_size)
 
-    callbacks = []
+    validation_data = fit_generator(val_imgs, batch_size)
+
+    #lr_schedule = lambda epoch: 0.001 if epoch < 120 else 0.0001
+    lr_schedule = lambda epoch: 0.005 if epoch < 120 else 0.0005
+    #lr_schedule = lambda epoch: 1e-5
+    callbacks = [LearningRateScheduler(lr_schedule)]
     callbacks.append(ModelCheckpoint(filepath="weights.hdf5", monitor='val_loss', save_best_only=True))
 
     model.fit_generator(train_data,
         steps_per_epoch=len(train_imgs) / batch_size,
         validation_steps=len(val_imgs) / batch_size,
-        epochs=100,
+        epochs=160,
         validation_data=validation_data,
-        #use_multiprocessing=False,
+        max_queue_size=50,
+        workers=1, use_multiprocessing=False,
         verbose=1,
         callbacks=callbacks)
 
