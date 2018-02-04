@@ -6,6 +6,7 @@ from darkflow.defaults import argHandler
 from multiprocessing.pool import ThreadPool
 from pycocotools.coco import COCO
 import tensorflow as tf
+import pickle
 
 def process_coco(coco, img_path):
     res = []
@@ -40,6 +41,20 @@ def my_postprocess(framework, net_out, im, img_name):
     #np.save(img_name.replace('.jpg', ''), net_out)
     np.savez_compressed(img_name.replace('.jpg', ''), net_out)
 
+def my_save_ckpt(tfnet, step, loss_profile):
+    file = '{}-{}{}'
+    model = tfnet.meta['name']
+
+    profile = file.format(model, step, '.profile')
+    profile = os.path.join(tfnet.FLAGS.backup, profile)
+    with open(profile, 'wb') as profile_ckpt:
+        pickle.dump(loss_profile, profile_ckpt)
+
+    ckpt = file.format(model, step, '')
+    ckpt = os.path.join(tfnet.FLAGS.backup, ckpt)
+    tfnet.say('Checkpoint at step {}'.format(step))
+    tfnet.saver.save(tfnet.sess, ckpt)
+
 if __name__ == "__main__":
     FLAGS = argHandler()
     FLAGS.setDefaults()
@@ -56,6 +71,12 @@ if __name__ == "__main__":
 
     _get_dir(requiredDirectories)
     tfnet = TFNet(FLAGS)
+
+    profile = [(0.0, 0.0)]
+    args = [0, profile]
+    my_save_ckpt(tfnet, *args)
+
+    aaaa;
 
     my_pool = ThreadPool()
 
@@ -93,7 +114,7 @@ if __name__ == "__main__":
         start = time.time()
         my_pool.map(lambda p: (lambda i, prediction:
             my_postprocess(tfnet.framework,
-               prediction, os.path.join(this_batch[i][0], this_batch[i][1]), os.path.join("masknet_data_28", this_batch[i][1])))(*p),
+               prediction, os.path.join(this_batch[i][0], this_batch[i][1]), os.path.join("masknet_data_17", this_batch[i][1])))(*p),
             enumerate(my_out))
         stop = time.time(); last = stop - start
 
