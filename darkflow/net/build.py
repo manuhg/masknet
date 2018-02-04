@@ -117,7 +117,7 @@ class TFNet(object):
 			state = op_create(*args)
 			mess = state.verbalise()
 			my_out = tf.identity(state.out, name=('my_tensor_' + str(i)))
-			if (i == 50):
+			if (i == 28):
 				self.my_out = my_out
 			if mess:
 				self.say(mess + ' my_tensor_' + str(i))

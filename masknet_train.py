@@ -156,7 +156,7 @@ def fit_generator(imgs, batch_size):
             x2 = []
             y = []
             for img_name, _, rois, msks in batch:
-                conv = np.load("masknet_data_50/" + img_name.replace('.jpg', '.npz'))['arr_0']
+                conv = np.load("masknet_data_28/" + img_name.replace('.jpg', '.npz'))['arr_0']
                 x1.append(conv)
                 x2.append(rois)
                 y.append(msks)
@@ -184,13 +184,13 @@ if __name__ == "__main__":
     model = masknet.create_model()
     model.summary()
     model.compile(loss=[masknet.my_loss], optimizer='adam', metrics=[my_accuracy])
-    #model.load_weights("weights2.hdf5")
+    #model.load_weights("weights50_1.hdf5")
 
     bdir = '../darknet/scripts/coco'
     train_coco = COCO(bdir + "/annotations/person_keypoints_train2014.json")
     val_coco = COCO(bdir + "/annotations/person_keypoints_val2014.json")
-    train_imgs = process_coco(train_coco, bdir + "/images/train2014", None)
-    val_imgs = process_coco(val_coco, bdir + "/images/val2014", 5000)
+    train_imgs = process_coco(train_coco, bdir + "/images/train2014", 10000)
+    val_imgs = process_coco(val_coco, bdir + "/images/val2014", 1500)
 
     #train_imgs += val_imgs[5000:]
     #val_imgs = val_imgs[:5000]
@@ -202,7 +202,7 @@ if __name__ == "__main__":
     validation_data = fit_generator(val_imgs, batch_size)
 
     #lr_schedule = lambda epoch: 0.001 if epoch < 120 else 0.0001
-    lr_schedule = lambda epoch: 0.005 if epoch < 120 else 0.0005
+    lr_schedule = lambda epoch: 0.0001
     #lr_schedule = lambda epoch: 1e-5
     callbacks = [LearningRateScheduler(lr_schedule)]
     callbacks.append(ModelCheckpoint(filepath="weights.hdf5", monitor='val_loss', save_best_only=True))

@@ -24,8 +24,12 @@ import keras.backend as K
 import tensorflow as tf
 
 my_num_rois = 32
-my_inp_size = 19
-my_msk_inp = 7
+#my_inp_size = 19
+#my_inp_depth = 1024
+my_inp_size = 38
+my_inp_depth = 512
+#my_msk_inp = 7
+my_msk_inp = 14
 
 class RoiPoolingConv(Layer):
     def __init__(self, pool_size, num_rois, **kwargs):
@@ -83,27 +87,27 @@ def my_loss(y_true, y_pred):
 
 class BatchNorm(KL.BatchNormalization):
     def call(self, inputs, training=None):
-        return super(self.__class__, self).call(inputs, training=True)
+        return super(self.__class__, self).call(inputs, training=False)
 
 def create_model():
-    img_input = Input(shape=(my_inp_size, my_inp_size, 1024))
+    img_input = Input(shape=(my_inp_size, my_inp_size, my_inp_depth))
     roi_input = Input(shape=(my_num_rois, 4))
 
     roi_pool_layer = RoiPoolingConv(my_msk_inp, my_num_rois)([img_input, roi_input])
 
     #x = TimeDistributed(Conv2D(2048, (3, 3), activation='relu', padding='same'))(roi_pool_layer)
 
-    x = KL.TimeDistributed(KL.Conv2D(2048, (3, 3), padding="same"))(roi_pool_layer)
-    x = KL.TimeDistributed(KL.BatchNormalization(axis=3))(x)
-    x = KL.Activation('relu')(x)
+    #x = KL.TimeDistributed(KL.Conv2D(2048, (3, 3), padding="same"))(roi_pool_layer)
+    #x = KL.TimeDistributed(BatchNorm(axis=3))(x)
+    #x = KL.Activation('relu')(x)
 
 
     #x = TimeDistributed(KL.Dropout(0.5))(x)
-    x = TimeDistributed(Conv2DTranspose(256, (2, 2), activation='relu', strides=2))(x)
+    #x = TimeDistributed(Conv2DTranspose(256, (2, 2), activation='relu', strides=2))(x)
     #x = TimeDistributed(KL.Dropout(0.5))(x)
-    x = TimeDistributed(Conv2D(1, (1, 1), activation='sigmoid', strides=1))(x)
+    #x = TimeDistributed(Conv2D(1, (1, 1), activation='sigmoid', strides=1))(x)
 
-    return Model(inputs=[img_input, roi_input], outputs=x)
+    #return Model(inputs=[img_input, roi_input], outputs=x)
 
     x = KL.TimeDistributed(KL.Conv2D(256, (3, 3), padding="same"),
                            name="mrcnn_mask_conv1")(roi_pool_layer)

@@ -15,7 +15,7 @@ def process_coco(coco, img_path):
     processed = 0
     iter1 = 0
 
-    #imgs = imgs[:1000]
+    imgs = imgs[:10000]
 
     for img in imgs:
         iter1 += 1
@@ -93,7 +93,7 @@ if __name__ == "__main__":
         start = time.time()
         my_pool.map(lambda p: (lambda i, prediction:
             my_postprocess(tfnet.framework,
-               prediction, os.path.join(this_batch[i][0], this_batch[i][1]), os.path.join("masknet_data_50", this_batch[i][1])))(*p),
+               prediction, os.path.join(this_batch[i][0], this_batch[i][1]), os.path.join("masknet_data_28", this_batch[i][1])))(*p),
             enumerate(my_out))
         stop = time.time(); last = stop - start
 
