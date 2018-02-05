@@ -82,8 +82,9 @@ if __name__ == "__main__":
     if file == 'camera':
         file = 0
     else:
-        assert os.path.isfile(file), \
-        'file {} does not exist'.format(file)
+        pass
+        #assert os.path.isfile(file), \
+        #'file {} does not exist'.format(file)
 
     camera = cv2.VideoCapture(file)
 
