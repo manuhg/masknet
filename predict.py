@@ -135,12 +135,13 @@ if __name__ == "__main__":
         # Only process and imshow when queue is full
         if elapsed % FLAGS.queue == 0:
             feed_dict = {tfnet.inp: buffer_pre}
-            net_out = tfnet.sess.run([tfnet.out, tfnet.my_c2, tfnet.my_c3, tfnet.my_c4], feed_dict)
+            net_out = tfnet.sess.run([tfnet.out, tfnet.my_c2, tfnet.my_c3, tfnet.my_c4, tfnet.my_c5], feed_dict)
             my_c2 = net_out[1]
             my_c3 = net_out[2]
             my_c4 = net_out[3]
+            my_c5 = net_out[4]
             net_out = net_out[0]
-            for img, single_out, c2, c3, c4 in zip(buffer_inp, net_out, my_c2, my_c3, my_c4):
+            for img, single_out, c2, c3, c4, c5 in zip(buffer_inp, net_out, my_c2, my_c3, my_c4, my_c5):
                 rois, num_true_rois = my_postprocess(tfnet.framework, single_out, img)
 
                 c2 = np.array(c2)
@@ -152,10 +153,13 @@ if __name__ == "__main__":
                 c4 = np.array(c4)
                 c4 = c4[np.newaxis, ...]
 
+                c5 = np.array(c5)
+                c5 = c5[np.newaxis, ...]
+
                 inp2 = np.array(rois)
                 inp2 = inp2[np.newaxis, ...]
 
-                p = model.predict([c2, c3, c4, inp2])
+                p = model.predict([c2, c3, c4, c5, inp2])
 
                 p = p[0, :num_true_rois, :, :, 0]
 

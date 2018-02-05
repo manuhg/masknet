@@ -75,6 +75,8 @@ def process_coco(coco, img_path, limit):
         frame_h = img['height']
         rois = []
         msks = []
+        bboxs = []
+        cocos = []
         for ann in anns:
             if ('bbox' in ann) and (ann['bbox'] != []) and ('segmentation' in ann):
                 bbox = [int(xx) for xx in ann['bbox']]
@@ -108,14 +110,16 @@ def process_coco(coco, img_path, limit):
                 h1 = np.float32(bbox[3])
 
                 rois.append([y1, x1, y1 + h1, x1 + w1])
-                msks.append(msk)
+                msks.append(ann)
+                bboxs.append(bbox)
+                cocos.append(coco)
         if (len(rois) > 0):
             for _ in range(masknet.my_num_rois - len(rois)):
                 rois.append([np.float32(0.0), np.float32(0.0), np.float32(0.0), np.float32(0.0)])
-                msks.append(fake_msk)
-            msks = np.array(msks)
-            msks = msks[..., np.newaxis]
-            res.append((img['file_name'], img_path, np.array(rois), msks))
+                msks.append(None)
+                bboxs.append(None)
+                cocos.append(None)
+            res.append((img['file_name'], img_path, np.array(rois), msks, bboxs, cocos))
 
     return res
 
@@ -153,6 +157,7 @@ def my_preprocess(im):
 @threadsafe_generator
 def fit_generator(imgs, batch_size):
     ii = 0
+    fake_msk = np.zeros((masknet.my_msk_inp * 2, masknet.my_msk_inp * 2), dtype=np.uint8).astype('float32')
     while True:
         shuffle(imgs)
         for k in range(len(imgs) // batch_size):
@@ -164,13 +169,25 @@ def fit_generator(imgs, batch_size):
             x1 = []
             x2 = []
             y = []
-            for img_name, img_path, rois, msks in batch:
+            for img_name, img_path, rois, anns, bboxs, cocos in batch:
                 #x12.append(np.load("masknet_data_17/" + img_name.replace('.jpg', '.npz'))['arr_0'])
                 #x13.append(np.load("masknet_data_28/" + img_name.replace('.jpg', '.npz'))['arr_0'])
                 #x14.append(np.load("masknet_data_43/" + img_name.replace('.jpg', '.npz'))['arr_0'])
                 frame = cv2.imread(img_path + "/" + img_name)
                 x1.append(my_preprocess(frame))
                 x2.append(rois)
+
+                msks = []
+                for k in range(len(bboxs)):
+                    if cocos[k] is None:
+                        msk = fake_msk
+                    else:
+                        msk = roi_pool_cpu(cocos[k].annToMask(anns[k]), bboxs[k], masknet.my_msk_inp * 2)
+                    msks.append(msk)
+
+                msks = np.array(msks)
+                msks = msks[..., np.newaxis]
+
                 y.append(msks)
             #gc.collect()
             #print("yield",ii)
@@ -222,7 +239,7 @@ def yolo():
     # Layer 5
     x = layers.Conv2D(128, (3, 3), strides=(1, 1), padding='same', name='conv_5', use_bias=False)(x)
     x = layers.BatchNormalization(name='norm_5')(x)
-    x= layers.advanced_activations.LeakyReLU(alpha=ALPHA)(x)
+    C2 = x= layers.advanced_activations.LeakyReLU(alpha=ALPHA)(x)
     x = layers.MaxPooling2D(pool_size=(2, 2))(x)
 
     # Layer 6
@@ -239,7 +256,7 @@ def yolo():
     # Layer 8
     x = layers.Conv2D(256, (3, 3), strides=(1, 1), padding='same', name='conv_8', use_bias=False)(x)
     x = layers.BatchNormalization(name='norm_8')(x)
-    C2 = x = layers.advanced_activations.LeakyReLU(alpha=ALPHA)(x)
+    C3 = x = layers.advanced_activations.LeakyReLU(alpha=ALPHA)(x)
     x = layers.MaxPooling2D(pool_size=(2, 2))(x)
 
     # Layer 9
@@ -266,7 +283,7 @@ def yolo():
     # Layer 13
     x = layers.Conv2D(512, (3, 3), strides=(1, 1), padding='same', name='conv_13', use_bias=False)(x)
     x = layers.BatchNormalization(name='norm_13')(x)
-    C3 = x = layers.advanced_activations.LeakyReLU(alpha=ALPHA)(x)
+    C4 = x = layers.advanced_activations.LeakyReLU(alpha=ALPHA)(x)
 
 
     skip_connection = x
@@ -306,11 +323,11 @@ def yolo():
     # Layer 20
     x = layers.Conv2D(1024, (3, 3), strides=(1, 1), padding='same', name='conv_20', use_bias=False)(x)
     x = layers.BatchNormalization(name='norm_20')(x)
-    C4 = layers.advanced_activations.LeakyReLU(alpha=ALPHA)(x)
+    C5 = layers.advanced_activations.LeakyReLU(alpha=ALPHA)(x)
 
     model = Model([input_image], x)
 
-    return model, input_image, C2, C3, C4
+    return model, input_image, C2, C3, C4, C5
 
 class WeightReader:
     def __init__(self, weight_file):
@@ -337,7 +354,7 @@ class MyModelCheckpoint(ModelCheckpoint):
         self.model = tmp_model
 
 if __name__ == "__main__":
-    yolo_model, yolo_input, yolo_C2, yolo_C3, yolo_C4 = yolo()
+    yolo_model, yolo_input, yolo_C2, yolo_C3, yolo_C4, yolo_C5 = yolo()
 
     weight_reader = WeightReader("bin/yolo.weights")
 
@@ -381,7 +398,7 @@ if __name__ == "__main__":
 
     m_roi_input = Input(shape=(masknet.my_num_rois, 4))
 
-    x = mn_model([yolo_C2, yolo_C3, yolo_C4, m_roi_input])
+    x = mn_model([yolo_C2, yolo_C3, yolo_C4, yolo_C5, m_roi_input])
 
     model = Model(inputs=[yolo_input, m_roi_input], outputs=x)
     model.summary()
@@ -391,14 +408,14 @@ if __name__ == "__main__":
     bdir = '../darknet/scripts/coco'
     train_coco = COCO(bdir + "/annotations/person_keypoints_train2014.json")
     val_coco = COCO(bdir + "/annotations/person_keypoints_val2014.json")
-    train_imgs = process_coco(train_coco, bdir + "/images/train2014", 20000)
-    val_imgs = process_coco(val_coco, bdir + "/images/val2014", 2000)
+    train_imgs = process_coco(train_coco, bdir + "/images/train2014", None)
+    val_imgs = process_coco(val_coco, bdir + "/images/val2014", None)
 
     train_coco = None
     val_coco = None
 
-    #train_imgs += val_imgs[5000:]
-    #val_imgs = val_imgs[:5000]
+    train_imgs += val_imgs[5000:]
+    val_imgs = val_imgs[:5000]
 
     batch_size = 16
 

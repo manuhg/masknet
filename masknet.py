@@ -76,14 +76,14 @@ class PyramidROIAlign(Layer):
         image_area = tf.cast(
             self.image_shape[0] * self.image_shape[1], tf.float32)
         roi_level = log2_graph(tf.sqrt(h * w) / (224.0 / tf.sqrt(image_area)))
-        roi_level = tf.minimum(4, tf.maximum(
+        roi_level = tf.minimum(5, tf.maximum(
             2, 4 + tf.cast(tf.round(roi_level), tf.int32)))
         roi_level = tf.squeeze(roi_level, 2)
 
         # Loop through levels and apply ROI pooling to each. P2 to P5.
         pooled = []
         box_to_level = []
-        for i, level in enumerate(range(2, 5)):
+        for i, level in enumerate(range(2, 6)):
             ix = tf.where(tf.equal(roi_level, level))
             level_boxes = tf.gather_nd(boxes, ix)
 
@@ -195,13 +195,17 @@ class BatchNorm(KL.BatchNormalization):
         return super(self.__class__, self).call(inputs, training=False)
 
 def create_model():
-    C2 = Input(shape=(76, 76, 256))
-    C3 = Input(shape=(38, 38, 512))
-    C4 = Input(shape=(19, 19, 1024))
+    C2 = Input(shape=(152, 152, 128))
+    C3 = Input(shape=(76, 76, 256))
+    C4 = Input(shape=(38, 38, 512))
+    C5 = Input(shape=(19, 19, 1024))
 
     roi_input = Input(shape=(my_num_rois, 4))
 
-    P4 = KL.Conv2D(256, (1, 1), name='fpn_c5p5')(C4)
+    P5 = KL.Conv2D(256, (1, 1), name='fpn_c5p5')(C5)
+    P4 = KL.Add(name="fpn_p4add")([
+        KL.UpSampling2D(size=(2, 2), name="fpn_p5upsampled")(P5),
+        KL.Conv2D(256, (1, 1), name='fpn_c4p4')(C4)])
     P3 = KL.Add(name="fpn_p3add")([
         KL.UpSampling2D(size=(2, 2), name="fpn_p4upsampled")(P4),
         KL.Conv2D(256, (1, 1), name='fpn_c3p3')(C3)])
@@ -212,8 +216,9 @@ def create_model():
     P2 = KL.Conv2D(256, (3, 3), padding="SAME", name="fpn_p2")(P2)
     P3 = KL.Conv2D(256, (3, 3), padding="SAME", name="fpn_p3")(P3)
     P4 = KL.Conv2D(256, (3, 3), padding="SAME", name="fpn_p4")(P4)
+    P5 = KL.Conv2D(256, (3, 3), padding="SAME", name="fpn_p5")(P5)
 
-    feature_maps = [P2, P3, P4]
+    feature_maps = [P2, P3, P4, P5]
 
     roi_pool_layer = PyramidROIAlign([my_msk_inp, my_msk_inp], np.array([608, 608, 3]),
                         name="roi_align_mask")([roi_input] + feature_maps)
@@ -268,4 +273,4 @@ def create_model():
     x = KL.TimeDistributed(KL.Conv2D(1, (1, 1), strides=1, activation="sigmoid"),
                            name="mrcnn_mask")(x)
 
-    return Model(inputs=[C2, C3, C4, roi_input], outputs=x)
+    return Model(inputs=[C2, C3, C4, C5, roi_input], outputs=x)
