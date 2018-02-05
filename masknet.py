@@ -195,12 +195,12 @@ class BatchNorm(KL.BatchNormalization):
         return super(self.__class__, self).call(inputs, training=False)
 
 def create_model():
-    C2 = Input(shape=(152, 152, 128))
-    C3 = Input(shape=(76, 76, 256))
-    C4 = Input(shape=(38, 38, 512))
-    C5 = Input(shape=(19, 19, 1024))
+    C2 = Input(shape=(152, 152, 128), name="input_C2")
+    C3 = Input(shape=(76, 76, 256), name="input_C3")
+    C4 = Input(shape=(38, 38, 512), name="input_C4")
+    C5 = Input(shape=(19, 19, 1024), name="input_C5")
 
-    roi_input = Input(shape=(my_num_rois, 4))
+    roi_input = Input(shape=(my_num_rois, 4), name="input_rois")
 
     P5 = KL.Conv2D(256, (1, 1), name='fpn_c5p5')(C5)
     P4 = KL.Add(name="fpn_p4add")([
@@ -271,6 +271,6 @@ def create_model():
                            name="mrcnn_mask_deconv")(x)
     #x = KL.Dropout(0.5)(x)
     x = KL.TimeDistributed(KL.Conv2D(1, (1, 1), strides=1, activation="sigmoid"),
-                           name="mrcnn_mask")(x)
+                           name="output")(x)
 
     return Model(inputs=[C2, C3, C4, C5, roi_input], outputs=x)
