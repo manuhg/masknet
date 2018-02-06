@@ -271,6 +271,6 @@ def create_model():
                            name="mrcnn_mask_deconv")(x)
     #x = KL.Dropout(0.5)(x)
     x = KL.TimeDistributed(KL.Conv2D(1, (1, 1), strides=1, activation="sigmoid"),
-                           name="output")(x)
+                           name="mask_output")(x)
 
     return Model(inputs=[C2, C3, C4, C5, roi_input], outputs=x)

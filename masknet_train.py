@@ -403,7 +403,7 @@ if __name__ == "__main__":
     model = Model(inputs=[yolo_input, m_roi_input], outputs=x)
     model.summary()
     model.compile(loss=[masknet.my_loss], optimizer='adam', metrics=[my_accuracy])
-    #model.load_weights("weights50_1.hdf5")
+    #mn_model.load_weights("weights1.hdf5")
 
     bdir = '../darknet/scripts/coco'
     train_coco = COCO(bdir + "/annotations/person_keypoints_train2014.json")
