@@ -19,7 +19,7 @@ import gc, math
 import keras.backend as K
 from scipy.misc import imresize
 from datetime import datetime
-import threading, os, re
+import threading, os, re, random
 
 from keras.engine.topology import Layer
 import keras.backend as K
@@ -119,7 +119,7 @@ def process_coco(coco, img_path, limit):
                 msks.append(None)
                 bboxs.append(None)
                 cocos.append(None)
-            res.append((img['file_name'], img_path, np.array(rois), msks, bboxs, cocos))
+            res.append((img['file_name'], img_path, rois, msks, bboxs, cocos))
 
     return res
 
@@ -173,9 +173,26 @@ def fit_generator(imgs, batch_size):
                 #x12.append(np.load("masknet_data_17/" + img_name.replace('.jpg', '.npz'))['arr_0'])
                 #x13.append(np.load("masknet_data_28/" + img_name.replace('.jpg', '.npz'))['arr_0'])
                 #x14.append(np.load("masknet_data_43/" + img_name.replace('.jpg', '.npz'))['arr_0'])
+
+                flip = random.randint(0, 1) == 0
+                flip = False
+
+
                 frame = cv2.imread(img_path + "/" + img_name)
+                if flip:
+                    frame = np.fliplr(frame)
                 x1.append(my_preprocess(frame))
-                x2.append(rois)
+
+                my_rois = []
+                for roi in rois:
+                    rx1 = roi[1]
+                    rx2 = roi[3]
+                    if flip:
+                        rx1 = 1.0 - roi[3]
+                        rx2 = 1.0 - roi[1]
+                    my_rois.append([roi[0], rx1, roi[2], rx2])
+
+                x2.append(np.array(my_rois))
 
                 msks = []
                 for k in range(len(bboxs)):
@@ -183,6 +200,8 @@ def fit_generator(imgs, batch_size):
                         msk = fake_msk
                     else:
                         msk = roi_pool_cpu(cocos[k].annToMask(anns[k]), bboxs[k], masknet.my_msk_inp * 2)
+                        if flip:
+                            msk = np.fliplr(msk)
                     msks.append(msk)
 
                 msks = np.array(msks)
