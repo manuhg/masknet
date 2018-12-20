@@ -115,7 +115,6 @@ filelist = [f for f in os.listdir(os.path.dirname(testImg["path"])) if os.path.i
 for f in filelist:
     os.remove(os.path.join(os.path.dirname(testImg["path"]), f))
 
-
 #TESTS FOR INFERENCE
 def test_CLI_IMG_YOLOv2():
     #Test predictions outputted to an image using the YOLOv2 model through CLI
