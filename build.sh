@@ -42,4 +42,4 @@ wget -nc $yolov2_tiny
 wget -nc $yolov3_tiny_weigths
 cd ../cfg
 wget -nc $yolov3_tiny_cfg
-wget -nc yolov2_tiny_cfg
+wget -nc $yolov2_tiny_cfg
