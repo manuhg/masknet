@@ -31,11 +31,12 @@ yolo="https://pjreddie.com/media/files/yolo.weights" #YOLOv2
 yolov2="https://pjreddie.com/media/files/yolov2.weights"
 yolov3="https://pjreddie.com/media/files/yolov3.weights"
 yolov2_tiny="https://pjreddie.com/media/files/yolov2-tiny.weights"
-
+yolov3_tiny_cfg='https://github.com/pjreddie/darknet/blob/master/cfg/yolov3-tiny.cfg'
+yolov3_tiny_weigths='https://pjreddie.com/media/files/yolov3-tiny.weights'
 wget $yolo_small
 wget $yolo
 wget $yolov2
 wget $yolov3
 wget $yolov2_tiny
-
-16 18 50
+wget $yolov3_tiny_cfg
+wget $yolov3_tiny_weigths
