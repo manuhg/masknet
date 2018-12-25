@@ -77,7 +77,7 @@ if __name__ == "__main__":
     model.load_weights("weights.hdf5")
 
     file = FLAGS.demo
-    SaveVideo = FLAGS.saveVideo
+    SaveVideo = True
 
     if file == 'camera':
         file = 0
@@ -105,13 +105,8 @@ if __name__ == "__main__":
         height, width, _ = frame.shape
 
     if SaveVideo:
-        fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        if file == 0:#camera window
-            fps = 1 / tfnet._get_fps(frame)
-            if fps < 1:
-                fps = 1
-        else:
-            fps = round(camera.get(cv2.CAP_PROP_FPS))
+        fourcc = cv2.VideoWriter_fourcc(*'DIVX')
+        fps = round(camera.get(cv2.CAP_PROP_FPS))
         videoWriter = cv2.VideoWriter(
             'video.avi', fourcc, fps, (width, height))
 
@@ -189,6 +184,7 @@ if __name__ == "__main__":
 
                     img[top:bot,left:right] = cv2.addWeighted(img[top:bot,left:right], 1.0, mask3, 0.8, 0)
 
+                videoWriter.write(img)
                 cv2.imshow('', img)
             # Clear Buffers
             buffer_inp = list()
