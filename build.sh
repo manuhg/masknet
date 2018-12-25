@@ -34,6 +34,8 @@ yolov2_tiny="https://pjreddie.com/media/files/yolov2-tiny.weights"
 yolov2_tiny_cfg='https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov2-tiny.cfg'
 yolov3_tiny_cfg='https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3-tiny.cfg'
 yolov3_tiny_weigths='https://pjreddie.com/media/files/yolov3-tiny.weights'
+strided_cfg='https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/strided.cfg'
+strided_weigths='https://pjreddie.com/media/files/strided.weights'
 wget -nc $yolo_small
 wget -nc $yolo
 wget -nc $yolov2
