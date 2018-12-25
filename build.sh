@@ -42,8 +42,8 @@ wget -nc $yolov2
 wget -nc $yolov3
 wget -nc $yolov2_tiny
 wget -nc $yolov3_tiny_weigths
-wget -nv strided_weigths
+wget -nv $strided_weigths
 cd ../cfg
 wget -nc $yolov3_tiny_cfg
 wget -nc $yolov2_tiny_cfg
-wget -nv strided_cfg
+wget -nv $strided_cfg
